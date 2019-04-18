@@ -17,9 +17,9 @@ df = df[df$longitude> 0.0,]
 
 
 
-a = c("#FFEDA0" ,"#FEB24C" ,"#F03B20")
-b =c( "#E5F5E0" ,"#A1D99B" ,"#31A354")
-c = c( "#DEEBF7" ,"#9ECAE1", "#3182BD")
+a = c( "#E5F5E0" ,"#A1D99B" ,"#31A354")   #Functional
+b =c( "#DEEBF7" ,"#9ECAE1", "#3182BD")   # REpair
+c = c("#FFEDA0" ,"#FEB24C" ,"#F03B20")  # Non Functional
 
 quantityLvls = c("All","Dry","Enough","Insufficient","Seasonal","Unknown")
 basinLvls = c("All", "Internal", "Lake Nyasa", "Lake Rukwa", "Lake Tanganyika",  "Lake Victoria", "Pangani", "Rufiji", "Ruvuma / Southern Coast", "Wami / Ruvu")    
@@ -61,11 +61,16 @@ server <- function(input, output) {
   #Defining Leaflet plot
   map <- leaflet() %>%
     addTiles() %>%
-    setView(lng=34.91, lat=-5.0 , zoom=6)
+    setView(lng=34.91, lat=-5.0 , zoom=6) %>%
+    addLegend("bottomleft", colors=c(a[3],b[3],c[3]), labels=c("Functional","Needs Repair","Non Functional") , title = "Pump Status",
+              layerId="colorLegend")
 
   output$map <- renderLeaflet(map)
   
   sub = df
+  
+  
+  #Creating data subset
   
   subsetDf <- reactive({
     
@@ -78,6 +83,8 @@ server <- function(input, output) {
     if (input$basin != "All"){
       sub = sub[sub$basin == input$basin,]
     }
+    
+    sub = sub[ (sub$gps_height > input$height[1]) & (sub$gps_height < input$height[2]),]
     
     sub
     
@@ -98,7 +105,7 @@ server <- function(input, output) {
    
    
    
-   if(zoom<10){
+   if(zoom<14){
      
      ### Heatmap
      
@@ -123,6 +130,15 @@ server <- function(input, output) {
      sub = subsetDf()
      print(nrow(sub))
      
+     popup <- paste0("<strong>Quantity: </strong>", 
+                           sub$quantity, 
+                           "<br><strong>Extraction Type : </strong>",
+                           sub$extraction_type_class,
+                           "<br><strong>Waterpoint type : </strong>",
+                           sub$waterpoint_type_group,
+                           "<br><strong>Population : </strong>",
+                           sub$population)
+     
      #Subset based on map bounds
      sub  = sub[ (sub$latitude > bounds$south) & (sub$latitude < bounds$north) & (sub$longitude > bounds$west) & (sub$longitude < bounds$east),]
      
@@ -131,13 +147,13 @@ server <- function(input, output) {
      leafletProxy("map") %>% clearHeatmap() %>% clearMarkers() %>%
      { if(1 %in% statusSelection) addCircleMarkers(., lng = sub[sub$status_group=='functional',]$longitude, lat = sub[sub$status_group=='functional',]$latitude,
                         radius = 5, stroke = FALSE, fillOpacity = 0.8, fillColor = a[3], 
-                        popup = "sdfddf", layerId = 4) else . }%>%
+                        popup = popup, layerId = 4) else . }%>%
      { if(2 %in% statusSelection) addCircleMarkers(., lng = sub[sub$status_group=='functional needs repair',]$longitude, lat = sub[sub$status_group=='functional needs repair',]$latitude,
                       radius = 5, stroke = FALSE, fillOpacity = 0.8, fillColor = b[3], 
-                      popup = "sdfddf", layerId = 5) else . }%>%
+                      popup = popup, layerId = 5) else . }%>%
      { if(3 %in% statusSelection) addCircleMarkers(., lng = sub[sub$status_group=='non functional',]$longitude, lat = sub[sub$status_group=='non functional',]$latitude,
                       radius = 5, stroke = FALSE, fillOpacity = 0.8, fillColor = c[3], 
-                      popup = "sdfddf", layerId = 6) else . } 
+                      popup = popup, layerId = 6) else . } 
        
      
    }
@@ -173,7 +189,7 @@ ui <- fluidPage(theme = shinytheme("flatly"),
                         
                         
                         selectInput("quantity", "Quantity ", choices=quantityLvls),
-                        sliderInput("height","GPS Height  ", min = 0, max=2800, value = c(0,500)),
+                        sliderInput("height","GPS Height  ", min = -90, max=2800, value = c(-90,2800)),
                         selectInput("basin", "Basin", choices=basinLvls),
                         
                         helpText("Data from AT&T (1961) The World's Telephones.")
