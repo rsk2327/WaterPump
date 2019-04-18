@@ -91,6 +91,24 @@ server <- function(input, output) {
     
   })
   
+  
+  output$composition <- renderPlot({
+    sub  = subsetDf()
+    
+    bounds = input$map_bounds
+    sub  = sub[ (sub$latitude > bounds$south) & (sub$latitude < bounds$north) & (sub$longitude > bounds$west) & (sub$longitude < bounds$east),]
+    
+    w=table(sub$status_group)/nrow(w)
+    w = data.frame(w)
+    
+    print(w)
+    
+    ggplot(data=w, aes(x=Var1, y=Freq)) +
+      geom_bar(stat="identity")
+    
+    
+  })
+  
   #Observing input for modifying leaflet app
   observe({
     
@@ -102,7 +120,7 @@ server <- function(input, output) {
     }
     
    radius = getRadius(zoom)
-   
+   bounds = input$map_bounds
    
    
    if(zoom<14){
@@ -112,6 +130,12 @@ server <- function(input, output) {
      leafletProxy("map") %>% clearHeatmap() %>% clearMarkers()
      
      sub = subsetDf()
+     sub  = sub[ (sub$latitude > bounds$south) & (sub$latitude < bounds$north) & (sub$longitude > bounds$west) & (sub$longitude < bounds$east),]
+     
+     # output$composition <- renderText({
+     #   paste0('You have selected: ', input$selectfile)
+     # })
+     
      print(nrow(sub))
      
      
@@ -179,7 +203,14 @@ ui <- fluidPage(theme = shinytheme("flatly"),
                       
                       
                       mainPanel(
-                        leafletOutput("map", width = "100%", height = "650px"),width = 10
+                        absolutePanel(bottom = 20, right = 20, width = 300,
+                                      draggable = TRUE,
+                                      
+                                      selectInput("quantity2", "Quantity ", choices=quantityLvls)),
+                        
+                        leafletOutput("map", width = "100%", height = "700px"),
+                        
+                        width = 10
                       ),
                       sidebarPanel(
                         checkboxGroupInput("status", label = "Status", 
@@ -187,7 +218,7 @@ ui <- fluidPage(theme = shinytheme("flatly"),
                                            selected = c(1,2,3)),
                         hr(),
                         
-                        
+                        plotOutput(outputId ="composition", height='80px', width = '100%'),
                         selectInput("quantity", "Quantity ", choices=quantityLvls),
                         sliderInput("height","GPS Height  ", min = -90, max=2800, value = c(-90,2800)),
                         selectInput("basin", "Basin", choices=basinLvls),
