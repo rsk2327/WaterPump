@@ -12,18 +12,17 @@ setwd("D:/UPenn/GAFL531/Project/App")
 
 
 df = read.csv('data_clean.csv')
-
-df1 = df[df$latitude< 0.0,]
-df1 = df1[df1$longitude> 0.0,]
+df = df[df$latitude< 0.0,]
+df = df[df$longitude> 0.0,]
 
 
 
 a = c("#FFEDA0" ,"#FEB24C" ,"#F03B20")
-
 b =c( "#E5F5E0" ,"#A1D99B" ,"#31A354")
-
 c = c( "#DEEBF7" ,"#9ECAE1", "#3182BD")
 
+quantityLvls = c("All","Dry","Enough","Insufficient","Seasonal","Unknown")
+basinLvls = c("All", "Internal", "Lake Nyasa", "Lake Rukwa", "Lake Tanganyika",  "Lake Victoria", "Pangani", "Rufiji", "Ruvuma / Southern Coast", "Wami / Ruvu")    
 
 
 getRadius <- function(zoom){
@@ -51,55 +50,52 @@ getBlur <- function(zoom){
 server <- function(input, output) {
 
 
-  
-  # df1  = df1[0:500,]
-  #-------------------------
-  # Maps
-  #-------------------------
   # poly <-
   #   readOGR("tza_admbnda_adm3_20181019", layer = "tza_admbnda_adm3_20181019", encoding = "UTF-8")
   # 
-  # poly <- spTransform(poly, CRS("+init=epsg:4326"))
+  # poly <- spTransform(poly, CRS("+init=epsg:3857"))
   
   
 
   
   #Defining Leaflet plot
-  
-  pal <- colorFactor("viridis", df1$status_group)
-  
-  
-  
-  dfFunc = df1[df1$status_group=='functional',]
-  dfNonFunc = df1[df1$status_group=='non functional',]
-  dfRepair = df1[df1$status_group=='functional needs repair',]
-  
   map <- leaflet() %>%
     addTiles() %>%
-    setView(lng=34.91, lat=-5.0 , zoom=7) %>%
-    addHeatmap(lng = dfFunc$longitude, lat = dfFunc$latitude, gradient = b, radius = 2, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 1) %>%
-    addHeatmap(lng = dfNonFunc$longitude, lat = dfNonFunc$latitude, gradient = a, radius = 2, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 2) %>%
-    addHeatmap(lng = dfNonFunc$longitude, lat = dfNonFunc$latitude, gradient = a, radius = 2, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 3)
-   
+    setView(lng=34.91, lat=-5.0 , zoom=6)
 
   output$map <- renderLeaflet(map)
   
+  sub = df
+  
+  subsetDf <- reactive({
+    
+    sub = df
+    
+    if (input$quantity != "All"){
+      sub = sub[sub$quantity == tolower(input$quantity),]
+    }
+    
+    if (input$basin != "All"){
+      sub = sub[sub$basin == input$basin,]
+    }
+    
+    sub
+    
+    
+  })
   
   #Observing input for modifying leaflet app
-  
   observe({
-    statusSelection <- input$status
     
+    statusSelection <- input$status
     zoom  = input$map_zoom
     
     if(is.null(zoom)){
-      zoom = 5
+      zoom = 6
     }
     
-    
-  
-   
    radius = getRadius(zoom)
+   
    
    
    if(zoom<10){
@@ -108,11 +104,14 @@ server <- function(input, output) {
      
      leafletProxy("map") %>% clearHeatmap() %>% clearMarkers()
      
+     sub = subsetDf()
+     print(nrow(sub))
+     
      
      leafletProxy("map") %>%
-     { if(1 %in% statusSelection) addHeatmap(., lng = df1[df1$status_group=='functional',]$longitude, lat = df1[df1$status_group=='functional',]$latitude, gradient = a, radius = radius, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 1) else . } %>%
-     { if(2 %in% statusSelection) addHeatmap(., lng = df1[df1$status_group=='functional needs repair',]$longitude, lat = df1[df1$status_group=='functional needs repair',]$latitude, gradient = b, radius = radius, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 2) else . } %>%
-     { if(3 %in% statusSelection) addHeatmap(., lng = df1[df1$status_group=='non functional',]$longitude, lat = df1[df1$status_group=='non functional',]$latitude, gradient = c, radius = radius, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 3) else . }
+     { if(1 %in% statusSelection) addHeatmap(., lng = sub[sub$status_group=='functional',]$longitude, lat = sub[sub$status_group=='functional',]$latitude, gradient = a, radius = radius, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 1) else . } %>%
+     { if(2 %in% statusSelection) addHeatmap(., lng = sub[sub$status_group=='functional needs repair',]$longitude, lat = sub[sub$status_group=='functional needs repair',]$latitude, gradient = b, radius = radius, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 2) else . } %>%
+     { if(3 %in% statusSelection) addHeatmap(., lng = sub[sub$status_group=='non functional',]$longitude, lat = sub[sub$status_group=='non functional',]$latitude, gradient = c, radius = radius, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 3) else . }
        
      
    }else{
@@ -121,16 +120,22 @@ server <- function(input, output) {
      
      bounds = input$map_bounds
      
-     df2  = df1[ (df1$latitude > bounds$south) & (df1$latitude < bounds$north) & (df1$longitude > bounds$west) & (df1$longitude < bounds$east),]
+     sub = subsetDf()
+     print(nrow(sub))
+     
+     #Subset based on map bounds
+     sub  = sub[ (sub$latitude > bounds$south) & (sub$latitude < bounds$north) & (sub$longitude > bounds$west) & (sub$longitude < bounds$east),]
+     
+     
      
      leafletProxy("map") %>% clearHeatmap() %>% clearMarkers() %>%
-     { if(1 %in% statusSelection) addCircleMarkers(., lng = df2[df2$status_group=='functional',]$longitude, lat = df2[df2$status_group=='functional',]$latitude,
+     { if(1 %in% statusSelection) addCircleMarkers(., lng = sub[sub$status_group=='functional',]$longitude, lat = sub[sub$status_group=='functional',]$latitude,
                         radius = 5, stroke = FALSE, fillOpacity = 0.8, fillColor = a[3], 
                         popup = "sdfddf", layerId = 4) else . }%>%
-     { if(2 %in% statusSelection) addCircleMarkers(., lng = df2[df2$status_group=='functional needs repair',]$longitude, lat = df2[df2$status_group=='functional needs repair',]$latitude,
+     { if(2 %in% statusSelection) addCircleMarkers(., lng = sub[sub$status_group=='functional needs repair',]$longitude, lat = sub[sub$status_group=='functional needs repair',]$latitude,
                       radius = 5, stroke = FALSE, fillOpacity = 0.8, fillColor = b[3], 
                       popup = "sdfddf", layerId = 5) else . }%>%
-     { if(3 %in% statusSelection) addCircleMarkers(., lng = df2[df2$status_group=='non functional',]$longitude, lat = df2[df2$status_group=='non functional',]$latitude,
+     { if(3 %in% statusSelection) addCircleMarkers(., lng = sub[sub$status_group=='non functional',]$longitude, lat = sub[sub$status_group=='non functional',]$latitude,
                       radius = 5, stroke = FALSE, fillOpacity = 0.8, fillColor = c[3], 
                       popup = "sdfddf", layerId = 6) else . } 
        
@@ -150,27 +155,36 @@ server <- function(input, output) {
 
 ui <- fluidPage(theme = shinytheme("flatly"),
                 navbarPage(
-                  "Place Matters",
-
-                  sidebarLayout(
+                  "Water Pumps",
+                  
+                  tabPanel("Map",
                     
-                    
-                    mainPanel(
-                      leafletOutput("map", width = "100%", height = "650px"),width = 10
-                    ),
-                    sidebarPanel(
-                      checkboxGroupInput("status", label = "Status", 
-                                         choices = list("Functional" = 1, "Needs Repair" = 2, "Non Functional" = 3),
-                                         selected = c(1,2,3)),
+                    sidebarLayout(
                       
-                      selectInput("status1", "Status:", 
-                                  choices=c("All","functional","functional needs repair","non functional")),
-                      hr(),
-                      helpText("Data from AT&T (1961) The World's Telephones.")
-                      , width=2
+                      
+                      mainPanel(
+                        leafletOutput("map", width = "100%", height = "650px"),width = 10
+                      ),
+                      sidebarPanel(
+                        checkboxGroupInput("status", label = "Status", 
+                                           choices = list("Functional" = 1, "Needs Repair" = 2, "Non Functional" = 3),
+                                           selected = c(1,2,3)),
+                        hr(),
+                        
+                        
+                        selectInput("quantity", "Quantity ", choices=quantityLvls),
+                        sliderInput("height","GPS Height  ", min = 0, max=2800, value = c(0,500)),
+                        selectInput("basin", "Basin", choices=basinLvls),
+                        
+                        helpText("Data from AT&T (1961) The World's Telephones.")
+                        , width=2
+                      )
+                      
                     )
                     
                   )
+
+                  
                   
                 )
                  
