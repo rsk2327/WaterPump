@@ -23,10 +23,10 @@ server <- function(input, output) {
   #-------------------------
   # Maps
   #-------------------------
-  poly <-
-    readOGR("tza_admbnda_adm2_20181019", layer = "tza_admbnda_adm2_20181019", encoding = "UTF-8")
-  
-  poly <- spTransform(poly, CRS("+init=epsg:4326"))
+  # poly <-
+  #   readOGR("tza_admbnda_adm3_20181019", layer = "tza_admbnda_adm3_20181019", encoding = "UTF-8")
+  # 
+  # poly <- spTransform(poly, CRS("+init=epsg:4326"))
   
   
 
@@ -35,14 +35,17 @@ server <- function(input, output) {
   
   pal <- colorFactor("viridis", df1$status_group)
   
-  map <- leaflet(data = poly) %>%
+  map <- leaflet() %>%
     addTiles() %>%
-    setView(lng=34.91, lat=-5.0 , zoom=5) %>%
-    addProviderTiles("CartoDB.Positron") %>% 
-    addCircleMarkers(lng = df1$longitude, lat = df1$latitude,
-                     radius = 2, stroke = FALSE, fillOpacity = 0.4, fillColor = pal(df1$status_group)) %>%
-    addLegend("bottomleft", pal=pal, values=df1$status_group ,
-              layerId="colorLegend")
+    setView(lng=34.91, lat=-5.0 , zoom=5) 
+    # addProviderTiles("CartoDB.Positron") %>% 
+    # addPolygons(fillColor = 'blue')
+    # addCircleMarkers(lng = df1$longitude, lat = df1$latitude,
+    #                  radius = 2, stroke = FALSE, fillOpacity = 0.8, fillColor = pal(df1$status_group),
+    #                  layerId = 1)
+                     
+    # addLegend("bottomleft", pal=pal, values=df1$status_group ,
+    #           layerId="colorLegend")
 
   output$map <- renderLeaflet(map)
   
@@ -51,21 +54,28 @@ server <- function(input, output) {
   
   observe({
     statusSelection <- input$status
-   
+   print(input$map_zoom)
     if (statusSelection != "All"){
-      dfsubset = df1[df1$status_group==statusSelection]
+      dfsubset = df1[df1$status_group==statusSelection,]
     }else{
       dfsubset = df1
     }
     
     
+    map <- leaflet() %>%
+      addTiles() %>%
+      setView(lng=34.91, lat=-5.0 , zoom=5) %>%
+    addCircleMarkers(lng = dfsubset$longitude, lat = dfsubset$latitude, radius=2,
+                     stroke=FALSE, fillOpacity=0.4, fillColor=pal(dfsubset$status_group),
+                     layerId = 1)
     
-    leafletProxy("map", data = dfsubset) %>%
-      clearMarkers() %>%
-      addCircleMarkers(lng = dfsubset$longitude, lat = dfsubset$latitude,
-                 stroke=FALSE, fillOpacity=0.4, fillColor=pal(dfsubset$status_group)) %>%
-      addLegend("bottomleft", pal=pal, values=dfsubset$status_group, 
-                layerId="colorLegend")
+    # leafletProxy("map") %>%
+    #   clearMarkers() %>%
+    #   addCircleMarkers(lng = dfsubset$longitude, lat = dfsubset$latitude, radius=2,
+    #              stroke=FALSE, fillOpacity=0.4, fillColor=pal(dfsubset$status_group),
+    #              layerId = 1)
+    # 
+    output$map <- renderLeaflet(map)
   })
   
   
@@ -76,7 +86,7 @@ ui <- fluidPage(theme = shinytheme("united"),
                 navbarPage(
                   "Place Matters",
                   titlePanel("Introducing the Shiny App"),
-                  br(),
+
                     
                   sidebarLayout(
                     
