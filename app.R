@@ -6,6 +6,7 @@ library(foreign)
 library(rgdal)
 library(RColorBrewer)
 library(leaflet.extras)
+library(ggplot2)
 
 
 setwd("D:/UPenn/GAFL531/Project/App")
@@ -84,6 +85,13 @@ server <- function(input, output) {
       sub = sub[sub$basin == input$basin,]
     }
     
+    statusList = c()
+    if( 1 %in% input$status){ statusList = c("functional", statusList)}
+    if( 2 %in% input$status){ statusList = c("functional needs repair", statusList)}
+    if( 3 %in% input$status){ statusList = c("non functional", statusList)}
+    
+    sub = sub[sub$status_group %in% statusList, ]
+    
     sub = sub[ (sub$gps_height > input$height[1]) & (sub$gps_height < input$height[2]),]
     
     sub
@@ -98,13 +106,17 @@ server <- function(input, output) {
     bounds = input$map_bounds
     sub  = sub[ (sub$latitude > bounds$south) & (sub$latitude < bounds$north) & (sub$longitude > bounds$west) & (sub$longitude < bounds$east),]
     
-    w=table(sub$status_group)/nrow(w)
+    w=table(sub$status_group)/nrow(sub)
     w = data.frame(w)
-    
+    w$c = c("A","B","C")
+    print("Printing w")
     print(w)
     
-    ggplot(data=w, aes(x=Var1, y=Freq)) +
-      geom_bar(stat="identity")
+    ggplot(data=w, aes(x=Var1, y=Freq, fill=c)) +
+      geom_bar(stat="identity")+
+      scale_fill_manual("legend", values = c("A" = a[3], "B" = b[3], "C" = c[3]))+
+      theme(legend.position="none")+
+      xlab("Status") + ylab("Percent")
     
     
   })
@@ -203,13 +215,11 @@ ui <- fluidPage(theme = shinytheme("flatly"),
                       
                       
                       mainPanel(
-                        absolutePanel(bottom = 20, right = 20, width = 300,
-                                      draggable = TRUE,
-                                      
-                                      selectInput("quantity2", "Quantity ", choices=quantityLvls)),
-                        
                         leafletOutput("map", width = "100%", height = "700px"),
                         
+                        absolutePanel(bottom = 20, right = 20, width = 300,
+                                      draggable = TRUE,
+                                      plotOutput(outputId ="composition", height='120px', width = '200px')),
                         width = 10
                       ),
                       sidebarPanel(
@@ -218,12 +228,11 @@ ui <- fluidPage(theme = shinytheme("flatly"),
                                            selected = c(1,2,3)),
                         hr(),
                         
-                        plotOutput(outputId ="composition", height='80px', width = '100%'),
+                        
                         selectInput("quantity", "Quantity ", choices=quantityLvls),
                         sliderInput("height","GPS Height  ", min = -90, max=2800, value = c(-90,2800)),
-                        selectInput("basin", "Basin", choices=basinLvls),
-                        
-                        helpText("Data from AT&T (1961) The World's Telephones.")
+                        selectInput("basin", "Basin", choices=basinLvls)
+                    
                         , width=2
                       )
                       
