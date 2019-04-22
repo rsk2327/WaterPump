@@ -232,10 +232,12 @@ server <- function(input, output) {
   
   ## PREDICTION
   test = df[1,]
+  levels(test$quantity) = mdl$forest$xlevels$quantity
   
   pred = predict(mdl,test,predict.all =TRUE)
   
   pred = c(pred$individual)
+  print(pred)
   
   conv <- function(x){
     if(x=="functional"){
@@ -248,11 +250,41 @@ server <- function(input, output) {
   pred=sapply(c(pred), conv)
   
   
+  predDataInput <- reactive({
+    
+    # test[,"quantity"]= tolower(input$pred_quantity)
+    test$quantity[] = tolower(input$pred_quantity)
+    
+    print(test)
+    
+    pred = predict(mdl,test,predict.all =TRUE)
+    pred = c(pred$individual)  
+    pred=sapply(c(pred), conv)
+    
+  })
   
-  r <- raster(xmn = 0, xmx = 10, ymn = 0, ymx = 5, nrows = 5, ncols = 10)
-  r[] = pred
-  plot(r,axes=FALSE, box=FALSE,legend=FALSE,col=c("#93D7A3","#FE988C"))
-  plot(rasterToPolygons(r), add=TRUE, border='white', lwd=2) 
+  
+  
+  output$rfPred = renderPlot({
+    
+    r <- raster(xmn = 0, xmx = 10, ymn = 0, ymx = 5, nrows = 5, ncols = 10)
+    r[] = predDataInput()
+    plot(r,axes=FALSE, box=FALSE,legend=FALSE,col=c("#93D7A3","#FE988C"))
+    plot(rasterToPolygons(r), add=TRUE, border='white', lwd=2) 
+    
+  })
+  
+  
+  observeEvent(input$action, {
+    
+    output$rfPred = renderPlot({
+      r <- raster(xmn = 0, xmx = 10, ymn = 0, ymx = 5, nrows = 5, ncols = 10)
+      r[] = predDataInput()
+      plot(r,axes=FALSE, box=FALSE,legend=FALSE,col=c("#93D7A3","#FE988C"))
+      plot(rasterToPolygons(r), add=TRUE, border='white', lwd=2) 
+    })
+    
+  })
   
   
 
@@ -312,8 +344,8 @@ ui <- fluidPage(theme = shinytheme("flatly"),
                           ),
                   
                   tabPanel("Prediction",
-                           selectInput("pred_quantity", "Quantity", choices=quantityLvls),
-                           selectInput("pred_extraction", "Extraction Type", choices=extractionLvls),
+                           selectInput("pred_quantity", "Quantity", choices=quantityLvls[2:length(quantityLvls)]),
+                           selectInput("pred_extraction", "Extraction Type", choices=extractionLvls[2:length(extractionLvls)]),
                            actionButton("action", label = "Action"),
                            plotOutput("rfPred"))
 
