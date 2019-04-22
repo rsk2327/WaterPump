@@ -16,7 +16,7 @@ df = read.csv('data_clean.csv')
 df = df[df$latitude< 0.0,]
 df = df[df$longitude> 0.0,]
 
-
+mdl = readRDS('rfModel.rds')
 
 a = c( "#E5F5E0" ,"#A1D99B" ,"#31A354")   #Functional
 b =c( "#DEEBF7" ,"#9ECAE1", "#3182BD")   # REpair
@@ -47,6 +47,19 @@ getBlur <- function(zoom){
     return(5)
   }
 }
+
+conv <- function(x){
+  
+  if(x=="functional"){
+    return(1.0)
+  }else if (x=='non functional'){
+    return(0.0)
+  }else{
+    return(0.5)
+  }
+}
+
+
 
 server <- function(input, output) {
 
@@ -208,7 +221,7 @@ server <- function(input, output) {
   
   
   ## Load RF model
-  mdl = readRDS('rfModel.rds')
+  
   abc = data.frame(mdl$importance)
   abc = add_rownames(abc,'Variable')
   abc$Variable <- factor(abc$Variable, levels = abc$Variable[order(abc$MeanDecreaseGini)])
@@ -230,7 +243,7 @@ server <- function(input, output) {
   
   
   
-  ## PREDICTION
+  ################## PREDICTION #########################
   test = df[1,]
   levels(test$quantity) = mdl$forest$xlevels$quantity
   
@@ -238,49 +251,43 @@ server <- function(input, output) {
   
   pred = c(pred$individual)
   print(pred)
-  
-  conv <- function(x){
-    if(x=="functional"){
-      return(1.0)
-    }else{
-      return(0.0)
-    }
-  }
-  
   pred=sapply(c(pred), conv)
   
   
-  predDataInput <- reactive({
+  predDataInput <- eventReactive(input$action,{
     
     # test[,"quantity"]= tolower(input$pred_quantity)
     test$quantity[] = tolower(input$pred_quantity)
     
-    print(test)
+    
     
     pred = predict(mdl,test,predict.all =TRUE)
     pred = c(pred$individual)  
+    print(pred)
     pred=sapply(c(pred), conv)
     
   })
   
   
   
-  output$rfPred = renderPlot({
-    
-    r <- raster(xmn = 0, xmx = 10, ymn = 0, ymx = 5, nrows = 5, ncols = 10)
-    r[] = predDataInput()
-    plot(r,axes=FALSE, box=FALSE,legend=FALSE,col=c("#93D7A3","#FE988C"))
-    plot(rasterToPolygons(r), add=TRUE, border='white', lwd=2) 
-    
-  })
+  # output$rfPred = renderPlot({
+  #   
+  #   r <- raster(xmn = 0, xmx = 10, ymn = 0, ymx = 5, nrows = 5, ncols = 10)
+  #   r[] = predDataInput()
+  #   plot(r,axes=FALSE, box=FALSE,legend=FALSE,col=c("#93D7A3","#FE988C"))
+  #   plot(rasterToPolygons(r), add=TRUE, border='white', lwd=2) 
+  #   
+  # })
   
   
   observeEvent(input$action, {
     
+    
+    
     output$rfPred = renderPlot({
-      r <- raster(xmn = 0, xmx = 10, ymn = 0, ymx = 5, nrows = 5, ncols = 10)
+      r <- raster(xmn = 0, xmx = 25, ymn = 0, ymx = 2, nrows = 2, ncols = 25)
       r[] = predDataInput()
-      plot(r,axes=FALSE, box=FALSE,legend=FALSE,col=c("#93D7A3","#FE988C"))
+      plot(r,axes=FALSE, box=FALSE,legend=FALSE,breaks=c(0.0,0.25,0.75,1.0),col=c("#FE988C","#93BADC","#93D7A3"))
       plot(rasterToPolygons(r), add=TRUE, border='white', lwd=2) 
     })
     
@@ -344,15 +351,32 @@ ui <- fluidPage(theme = shinytheme("flatly"),
                           ),
                   
                   tabPanel("Prediction",
-                           selectInput("pred_quantity", "Quantity", choices=quantityLvls[2:length(quantityLvls)]),
-                           selectInput("pred_extraction", "Extraction Type", choices=extractionLvls[2:length(extractionLvls)]),
-                           actionButton("action", label = "Action"),
-                           plotOutput("rfPred"))
-
-                  
-                  
+                           
+                             plotOutput("rfPred", height = "200px", width = "100%"),
+                           wellPanel(width = 12, 
+                                     fluidRow(
+                                       column(3,
+                                              selectInput("pred_quantity", "Quantity", choices=quantityLvls[2:length(quantityLvls)]),
+                                              selectInput("pred_extraction", "Extraction Type", choices=extractionLvls[2:length(extractionLvls)]),
+                                              selectInput("pred_funder", "Funder", choices=mdl$forest$xlevels$funder),
+                                              selectInput("pred_basin", "Basin", choices=mdl$forest$xlevels$basin)
+                                       ),
+                                       
+                                       column(4, offset = 1,
+                                              selectInput("pred_installer", "Installer", choices=mdl$forest$xlevels$installer),
+                                              selectInput("pred_scheme", "Scheme", choices=mdl$forest$xlevels$scheme_management),
+                                              selectInput("pred_permit", "Permit", choices=mdl$forest$xlevels$permit),
+                                              selectInput("pred_payment", "Payment", choices=mdl$forest$xlevels$payment)
+                                       ),
+                                       
+                                       column(4,
+                                              actionButton("action", label = "Action")
+                                       )
+                                       
+                                     )
+                           )
+                  )
                 )
-                 
 )
 
 
