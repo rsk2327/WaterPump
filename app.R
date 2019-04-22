@@ -24,7 +24,7 @@ c = c("#FFEDA0" ,"#FEB24C" ,"#F03B20")  # Non Functional
 
 quantityLvls = c("All","Dry","Enough","Insufficient","Seasonal","Unknown")
 basinLvls = c("All", "Internal", "Lake Nyasa", "Lake Rukwa", "Lake Tanganyika",  "Lake Victoria", "Pangani", "Rufiji", "Ruvuma / Southern Coast", "Wami / Ruvu")    
-
+extractionLvls= c("All", "Gravity","Handpump","Motorpump","Other","Rope pump", "Submersible", "Wind-powered")
 
 getRadius <- function(zoom){
   
@@ -85,6 +85,10 @@ server <- function(input, output) {
       sub = sub[sub$basin == input$basin,]
     }
     
+    if (input$extraction != "All"){
+      sub = sub[sub$extraction_type_class == tolower(input$extraction),]
+    }
+    
     statusList = c()
     if( 1 %in% input$status){ statusList = c("functional", statusList)}
     if( 2 %in% input$status){ statusList = c("functional needs repair", statusList)}
@@ -114,12 +118,13 @@ server <- function(input, output) {
     
     ggplot(data=w, aes(x=Var1, y=Freq, fill=c)) +
       geom_bar(stat="identity")+
-      scale_fill_manual("legend", values = c("A" = a[3], "B" = b[3], "C" = c[3]))+
-      theme(legend.position="none")+
+      scale_fill_manual("legend", values = c("A" = "#93D7A3", "B" = "#93BADC", "C" = "#FE988C"))+
+      theme(legend.position="none",axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+            plot.background = element_blank())+
       xlab("Status") + ylab("Percent")
     
     
-  })
+  }, bg="transparent")
   
   #Observing input for modifying leaflet app
   observe({
@@ -202,6 +207,56 @@ server <- function(input, output) {
   })
   
   
+  ## Load RF model
+  mdl = readRDS('rfModel.rds')
+  abc = data.frame(mdl$importance)
+  abc = add_rownames(abc,'Variable')
+  abc$Variable <- factor(abc$Variable, levels = abc$Variable[order(abc$MeanDecreaseGini)])
+  
+  output$varPlot = renderPlot({
+
+    ggplot(abc, aes(x=Variable, y=MeanDecreaseGini,fill=MeanDecreaseGini)) +
+      geom_bar(stat='identity') +
+      scale_fill_continuous() +
+      ylab("Variable Importance") +
+      xlab("Variable ") +
+      coord_flip()+
+      theme(legend.position = "none",
+            text = element_text(size = 20)
+            )
+      
+
+  })
+  
+  
+  
+  ## PREDICTION
+  test = df[1,]
+  
+  pred = predict(mdl,test,predict.all =TRUE)
+  
+  pred = c(pred$individual)
+  
+  conv <- function(x){
+    if(x=="functional"){
+      return(1.0)
+    }else{
+      return(0.0)
+    }
+  }
+  
+  pred=sapply(c(pred), conv)
+  
+  
+  
+  r <- raster(xmn = 0, xmx = 10, ymn = 0, ymx = 5, nrows = 5, ncols = 10)
+  r[] = pred
+  plot(r,axes=FALSE, box=FALSE,legend=FALSE,col=c("#93D7A3","#FE988C"))
+  plot(rasterToPolygons(r), add=TRUE, border='white', lwd=2) 
+  
+  
+
+  
 }
 
 
@@ -215,7 +270,7 @@ ui <- fluidPage(theme = shinytheme("flatly"),
                       
                       
                       mainPanel(
-                        leafletOutput("map", width = "100%", height = "700px"),
+                        leafletOutput("map", width = "100%", height = "600px"),
                         
                         absolutePanel(bottom = 20, right = 20, width = 300,
                                       draggable = TRUE,
@@ -231,14 +286,36 @@ ui <- fluidPage(theme = shinytheme("flatly"),
                         
                         selectInput("quantity", "Quantity ", choices=quantityLvls),
                         sliderInput("height","GPS Height  ", min = -90, max=2800, value = c(-90,2800)),
-                        selectInput("basin", "Basin", choices=basinLvls)
+                        selectInput("basin", "Basin", choices=basinLvls),
+                        selectInput("extraction", "Extraction Type", choices=extractionLvls)
                     
                         , width=2
                       )
                       
                     )
                     
-                  )
+                  ),
+                  
+                  tabPanel("Var Importance",
+                           h2("Random Forest Variable Importance"),
+                           
+                           sidebarLayout(
+                             mainPanel(plotOutput("varPlot",  height='600px'),width = 10),
+                             
+                             sidebarPanel(h6("Random Forest calculates the predictive power of each variable by calculating the mean decrease in Node Impurity caused by each
+                                             variable at all nodes across the Random Forest model. This provides a robust and generalizable way to estimate the effect of each
+                                             variable in predicting for the target variable"), width = 2,columns = 2)
+                           )
+                           
+                           
+                          
+                          ),
+                  
+                  tabPanel("Prediction",
+                           selectInput("pred_quantity", "Quantity", choices=quantityLvls),
+                           selectInput("pred_extraction", "Extraction Type", choices=extractionLvls),
+                           actionButton("action", label = "Action"),
+                           plotOutput("rfPred"))
 
                   
                   
