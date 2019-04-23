@@ -246,6 +246,9 @@ server <- function(input, output) {
   ################## PREDICTION #########################
   test = df[1,]
   levels(test$quantity) = mdl$forest$xlevels$quantity
+  levels(test$scheme_management) = mdl$forest$xlevels$scheme_management
+  levels(test$extraction_type_class) = mdl$forest$xlevels$extraction_type_class
+  levels(test$funder) = mdl$forest$xlevels$funder
   
   pred = predict(mdl,test,predict.all =TRUE)
   
@@ -256,15 +259,74 @@ server <- function(input, output) {
   
   predDataInput <- eventReactive(input$action,{
     
-    # test[,"quantity"]= tolower(input$pred_quantity)
+    
     test$quantity[] = tolower(input$pred_quantity)
     
+    print(input$pred_scheme)
+    
+    test$scheme_management[] = input$pred_scheme
+
+    test$extraction_type_class[] = tolower(input$pred_extraction)
+
+    test$funder[] = input$pred_funder
+
+    test$basin[] = input$pred_basin
+
+    test$installer[] = input$pred_installer
+
+    test$payment[] = input$pred_payment
+
+    test$source[] = input$pred_source
+
+    test$quality_group[] = input$pred_quality
+
+    test$gps_height[] = as.integer(input$pred_gps)
+
+    test$amount_tsh[] = as.integer(input$pred_amount)
+    
+    
+    ##################################################
+    
+    # column(3,
+    #        selectInput("pred_quantity", "Quantity", choices=quantityLvls[2:length(quantityLvls)]),
+    #        selectInput("pred_extraction", "Extraction Type", choices=extractionLvls[2:length(extractionLvls)]),
+    #        selectInput("pred_funder", "Funder", choices=mdl$forest$xlevels$funder),
+    #        selectInput("pred_basin", "Basin", choices=mdl$forest$xlevels$basin)
+    # ),
+    # 
+    # column(4, offset = 1,
+    #        selectInput("pred_installer", "Installer", choices=mdl$forest$xlevels$installer),
+    #        selectInput("pred_scheme", "Scheme", choices=mdl$forest$xlevels$scheme_management),
+    #        selectInput("pred_permit", "Permit", choices=mdl$forest$xlevels$permit),
+    #        selectInput("pred_payment", "Payment", choices=mdl$forest$xlevels$payment)
+    # ),
+    # 
+    # column(4,
+    #        selectInput("pred_source", "Source", choices=mdl$forest$xlevels$source),
+    #        selectInput("pred_quality", "Quality", choices=mdl$forest$xlevels$quality_group),
+    #        sliderInput("pred_gps","GPS Height",min = -90, max = 2800),
+    #        sliderInput("pred_amount","Amount",min = 0, max = 300000)
+           
+    ##################################################################
     
     
     pred = predict(mdl,test,predict.all =TRUE)
-    pred = c(pred$individual)  
-    print(pred)
-    pred=sapply(c(pred), conv)
+    
+    pred
+    
+  })
+  
+  output$prediction = renderText({
+    pred = predDataInput()
+    predAgg = as.character(pred$aggregate[1])
+    
+    if (predAgg =='functional'){
+      predAgg = "Functional"
+    }else if (predAgg =='non functional'){
+      predAgg = "Non Functional"
+    }else{
+      predAgg = "Functional Needs Repair"
+    }
     
   })
   
@@ -286,7 +348,12 @@ server <- function(input, output) {
     
     output$rfPred = renderPlot({
       r <- raster(xmn = 0, xmx = 25, ymn = 0, ymx = 2, nrows = 2, ncols = 25)
-      r[] = predDataInput()
+      
+      pred = predDataInput()
+      pred = c(pred$individual)  
+      pred=sapply(c(pred), conv)
+      
+      r[] = pred
       plot(r,axes=FALSE, box=FALSE,legend=FALSE,breaks=c(0.0,0.25,0.75,1.0),col=c("#FE988C","#93BADC","#93D7A3"))
       plot(rasterToPolygons(r), add=TRUE, border='white', lwd=2) 
     })
@@ -352,7 +419,19 @@ ui <- fluidPage(theme = shinytheme("flatly"),
                   
                   tabPanel("Prediction",
                            
-                             plotOutput("rfPred", height = "200px", width = "100%"),
+                           
+                           sidebarLayout(
+                             mainPanel(
+                               plotOutput("rfPred", height = "200px", width = "100%")
+                             ),
+                             sidebarPanel(
+                               h4(" Prediction "),
+                               h1(textOutput("prediction")),
+                               
+                               hr(),
+                               actionButton("action", label = "Run")
+                             )
+                           ),
                            wellPanel(width = 12, 
                                      fluidRow(
                                        column(3,
@@ -370,7 +449,11 @@ ui <- fluidPage(theme = shinytheme("flatly"),
                                        ),
                                        
                                        column(4,
-                                              actionButton("action", label = "Action")
+                                              selectInput("pred_source", "Source", choices=mdl$forest$xlevels$source),
+                                              selectInput("pred_quality", "Quality", choices=mdl$forest$xlevels$quality_group),
+                                              sliderInput("pred_gps","GPS Height",min = -90, max = 2800,val = 100),
+                                              sliderInput("pred_amount","Amount",min = 0, max = 300000, val = 200)
+                                              
                                        )
                                        
                                      )
@@ -383,56 +466,3 @@ ui <- fluidPage(theme = shinytheme("flatly"),
 shinyApp(ui = ui, server = server)
 
 
-
-
-# 
-# gradient = colorNumeric("Blues",domain=NULL)
-# addHeatmap(lng = dfFunc$longitude, lat = dfFunc$latitude, intensity = replicate(nrow(dfFunc),1) , radius = 30000, minOpacity = 0.1, blur=1, layerId = 1) %>%
-# addHeatmap(lng = dfNonFunc$longitude, lat = dfNonFunc$latitude, intensity = replicate(nrow(dfNonFunc),1) ,radius = 10000, minOpacity = 0.1, blur=1, layerId = 2)
-# addWebGLHeatmap(lng = dfFunc$longitude, lat = dfFunc$latitude, size = 10000, opacity = 0.5, layerId = 1, gradientTexture = 'skyline') %>%
-# addWebGLHeatmap(lng = dfNonFunc$longitude, lat = dfNonFunc$latitude, size = 10000, opacity = 0.5, layerId = 2, gradientTexture = 'deep-sea')
-# addProviderTiles("CartoDB.Positron") %>% 
-# addPolygons(fillColor = 'blue')
-# addCircleMarkers(lng = df1$longitude, lat = df1$latitude,
-#                  radius = 2, stroke = FALSE, fillOpacity = 0.8, fillColor = pal(df1$status_group),
-#                  layerId = 1)
-
-# addLegend("bottomleft", pal=pal, values=df1$status_group ,
-#           layerId="colorLegend")
-
-
-# leafletProxy("map") %>%
-#   clearHeatmap()%>%
-#   addHeatmap(lng = dfFunc$longitude, lat = dfFunc$latitude, gradient = b, radius = 2, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 1) %>%
-#   addHeatmap(lng = dfNonFunc$longitude, lat = dfNonFunc$latitude, gradient = a, radius = 2, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 2) %>%
-#   addHeatmap(lng = dfNonFunc$longitude, lat = dfNonFunc$latitude, gradient = a, radius = 2, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 3)
-#   
-
-
-# 
-#   # addCircleMarkers(lng = dfsubset$longitude, lat = dfsubset$latitude, radius=2,
-#   #            stroke=FALSE, fillOpacity=0.4, fillColor=pal(dfsubset$status_group),
-#   #            layerId = 1)
-
-
-# 
-# if (1 %in% statusSelection){
-#   
-#   subset = df1[df1$status_group =='functional',]
-#   leafletProxy("map") %>% 
-#     addHeatmap(lng = subset$longitude, lat = subset$latitude, gradient = b, radius = radius, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 1) 
-# }
-# 
-# if (2 %in% statusSelection){
-#   
-#   subset = df1[df1$status_group =='functional needs repair',]
-#   leafletProxy("map") %>% 
-#     addHeatmap(lng = subset$longitude, lat = subset$latitude, gradient = a, radius = radius, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 2) 
-# }
-# 
-# if (3 %in% statusSelection){
-#   
-#   subset = df1[df1$status_group =='non functional',]
-#   leafletProxy("map") %>% 
-#     addHeatmap(lng = subset$longitude, lat = subset$latitude, gradient = c, radius = radius, blur = 1, minOpacity = 0.2, max = 0.5, layerId = 3) 
-# }
